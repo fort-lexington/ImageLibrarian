@@ -28,9 +28,9 @@ There must be a single `images.json` in the same folder as `main.py`.
 
 The strategy to get the date is to:
 
-1. Get the date taken from EXIF data embedded in JPG format (DateTimeOriginal)
-2. Look for file names that start with a date stamp matching `YYYYMMDD`
-3. Use the file created date
+1. Extract EXIF data embedded in JPG format (DateTimeOriginal)
+2. Match file names that start with a date stamp  `YYYYMMDD_`
+3. Use the system file created date
 
 Run by configuring `images.json` and typing the following from the script directory:
 
