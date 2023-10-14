@@ -8,7 +8,6 @@ import logging
 
 class ImageLibrarian:
 
-    # YYYYMMDD
     date_pattern = re.compile(r'^(\d\d\d\d)(\d\d)(\d\d)_')
 
     def __init__(self, init_file):
@@ -93,7 +92,6 @@ class ImageLibrarian:
             logging.error('Unable to copy file {0}'.format(from_file_path))
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     log_name = datetime.datetime.now().strftime('%Y%m%d_%H%M%S.log')
     logging.basicConfig(filename=log_name, encoding='utf-8', level=logging.DEBUG)
