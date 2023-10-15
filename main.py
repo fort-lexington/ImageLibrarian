@@ -18,14 +18,14 @@ class ImageLibrarian:
 
     date_pattern = re.compile(r'^(\d\d\d\d)(\d\d)(\d\d)_')
 
-    def __init__(self, init_file):
-        self.PREFLIGHT = True
+    def __init__(self, config, preflight=False):
+        self.PREFLIGHT = preflight
         self.output_root = ''
         self.seed_list = list()
         self.unique_hash = set()
         self.total_size_mb = 0
 
-        with open(init_file, 'r', encoding='utf8') as fh:
+        with open(config, 'r', encoding='utf8') as fh:
             seeds = json.load(fh)
             self.seed_list = seeds['dirs']
             self.output_root = seeds['destination']
@@ -59,14 +59,20 @@ class ImageLibrarian:
                     tags = exifread.process_file(f)
                     dto = tags.get('EXIF DateTimeOriginal')
                     str_dto = str(dto)
-                    if re.match(r'\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}', str_dto):
+                    # YYYY:MM:DD
+                    if dto is None or str_dto == '0000:00:00 00:00:00':
+                        original_date_time = None
+                    elif re.match(r'\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}', str_dto):
                         original_date_time = datetime.datetime.strptime(str_dto, '%Y:%m:%d %H:%M:%S')
-                        logging.info('Found EXIF datetime {0}'.format(original_date_time))
+                    # MM.DD.YYYY
                     elif  re.match(r'\d{2}\.\d{2}.\d{4} \d{2}:\d{2}:\d{2}', str_dto):
                         original_date_time = datetime.datetime.strptime(str_dto, '%m.%d.%Y %H:%M:%S')
-                        logging.info('Found EXIF datetime {0}'.format(original_date_time))
             except Exception as err:
-                logging.error('EXIF error ', err)
+                logging.error('EXIF error {0}'.format(path_name))
+
+        if original_date_time is not None:
+            logging.info('Found EXIF datetime {0}'.format(original_date_time))
+
         return original_date_time
 
     def is_image(self, file_name: str):
@@ -103,23 +109,30 @@ class ImageLibrarian:
 
         self.log_size(abs_path)
 
-        orig_date = ImageLibrarian.get_exif_date(abs_path)
+        exif_date = ImageLibrarian.get_exif_date(abs_path)
         file_name_date = ImageLibrarian.get_date_from_name(os.path.basename(abs_path))
-        final_created_date = ImageLibrarian.get_created_date(abs_path)
+        system_created_date = ImageLibrarian.get_created_date(abs_path)
 
-        if orig_date is None:
-            final_created_date = ImageLibrarian.get_created_date(abs_path)
-        elif file_name_date is not None:
-            final_created_date = ImageLibrarian.get_exif_date(abs_path)
+        final_created_date = system_created_date # default
+
+        if file_name_date is not None:
+            final_created_date = file_name_date
+        elif exif_date is not None:
+            final_created_date = exif_date
 
         if self.PREFLIGHT:
+            preview = self.preview_path(self.output_root, abs_path, final_created_date)
+            print('PREFLIGHT: {0} to {1}'.format(abs_path, preview))
             return
 
         destination = self.make_target_dirs(self.output_root, abs_path, final_created_date)
         self.copy_file(abs_path, destination)
 
+    def preview_path(self, target_dir, file_path, date_time: datetime.datetime):
+        return os.path.join(target_dir, '{:0>4}'.format(date_time.year), '{:0>2}'.format(date_time.month), os.path.basename(file_path))
+
     def make_target_dirs(self, target_dir, file_path, date_time: datetime.datetime):
-        new_folder = os.path.join(target_dir, '{:0>4}'.format(date_time.year), '{:0>2}'.format(date_time.month), os.path.basename(file_path))
+        new_folder = self.preview_path(target_dir, file_path, date_time)
         os.makedirs(os.path.dirname(new_folder), exist_ok=True)
         return new_folder
 
@@ -135,7 +148,7 @@ if __name__ == '__main__':
     log_name = datetime.datetime.now().strftime('%Y%m%d_%H%M%S.log')
     logging.basicConfig(filename=log_name, level=logging.INFO)
 
-    manager = ImageLibrarian('images.json')
+    manager = ImageLibrarian('images.json', preflight=True)
     manager.walk()
     print('Total MB: {0}'.format(manager.total_size_mb))
     print('File Count: {0}'.format(len(manager.unique_hash)))
