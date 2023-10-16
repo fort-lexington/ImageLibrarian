@@ -108,7 +108,7 @@ class ImageLibrarian:
 
     def log_size(self, abs_path):
         file_stats = os.stat(abs_path)
-        self.total_size_mb = file_stats.st_size / (1024 * 1024)
+        self.total_size_mb += file_stats.st_size / (1024 * 1024)
 
     def process_file(self, abs_path):
         logging.debug(abs_path)
