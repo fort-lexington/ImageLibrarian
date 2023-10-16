@@ -76,7 +76,7 @@ class ImageLibrarian:
         return original_date_time
 
     def is_image(self, file_name: str):
-        return True if file_name.endswith(self.image_formats) else False
+        return True if file_name.lower().endswith(self.image_formats) else False
 
     def walk(self):
         for image_root in self.seed_list:
@@ -92,6 +92,8 @@ class ImageLibrarian:
     def is_duplicate(self, abs_path):
         hash = get_sha256(abs_path)
         if hash in self.unique_hash:
+            if self.PREFLIGHT:
+                print('DUPLICATE {0}'.format(abs_path))
             return True
         else:
             self.unique_hash.add(hash)
@@ -104,7 +106,7 @@ class ImageLibrarian:
     def process_file(self, abs_path):
         logging.debug(abs_path)
         if self.is_duplicate(abs_path):
-            logging.info('Duplicate: {0}'.format(abs_path))
+            logging.info('DUPLICATE {0}'.format(abs_path))
             return
 
         self.log_size(abs_path)
@@ -138,6 +140,10 @@ class ImageLibrarian:
 
     def copy_file(self, from_file_path, to_path):
         try:
+            if os.path.exists(to_path): # No Replace
+                return
+            else:
+                print('COPY ', to_path)
             shutil.copy2(from_file_path, to_path)
             logging.info('Copied {0} to {1}'.format(from_file_path, to_path))
         except IOError as err:
@@ -148,7 +154,7 @@ if __name__ == '__main__':
     log_name = datetime.datetime.now().strftime('%Y%m%d_%H%M%S.log')
     logging.basicConfig(filename=log_name, level=logging.INFO)
 
-    manager = ImageLibrarian('images.json', preflight=True)
+    manager = ImageLibrarian('images.json', preflight=False)
     manager.walk()
     print('Total MB: {0}'.format(manager.total_size_mb))
     print('File Count: {0}'.format(len(manager.unique_hash)))
