@@ -16,8 +16,8 @@ def get_sha256(file_path):
 
 class ImageLibrarian:
 
-    date_pattern = re.compile(r'^(\d\d\d\d)(\d\d)(\d\d)_')
-
+    date_pattern_1 = re.compile(r'^(\d\d\d\d)(\d\d)(\d\d)_')
+    date_pattern_2 = re.compile(r'^(\d\d\d\d)-(\d\d)-(\d\d)\s')
     def __init__(self, config, preflight=False):
         self.PREFLIGHT = preflight
         self.output_root = ''
@@ -38,26 +38,33 @@ class ImageLibrarian:
         return datetime.datetime.fromtimestamp(create_time)
 
     @staticmethod
+    def get_modified_date(file_path):
+        modified_time = os.path.getmtime(file_path)
+        return datetime.datetime.fromtimestamp(modified_time)
+
+    @staticmethod
     def get_date_from_name(file_name):
-        m = ImageLibrarian.date_pattern.match(file_name)
+        m = ImageLibrarian.date_pattern_1.match(file_name) or ImageLibrarian.date_pattern_2.match(file_name)
+
         if m is None:
             return None
 
         file_name_date = None
-        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
-        if m and 1970 < year <= 2030 and 0 < month <= 12 and 0 < day <= 31:
-            file_name_date =  datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            logging.info('Found date {0}'.format(file_name_date))
+        if m:
+            year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if 1970 < year <= 2030 and 0 < month <= 12 and 0 < day <= 31:
+                file_name_date =  datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+                logging.info('Found date {0}'.format(file_name_date))
         return file_name_date
 
     @staticmethod
     def get_exif_date(path_name):
         original_date_time = None
-        if path_name.endswith(('.jpeg', '.jpg',)):
+        if path_name.lower().endswith(('.jpeg', '.jpg',)):
             try:
                 with open(path_name, 'rb') as f:
                     tags = exifread.process_file(f)
-                    dto = tags.get('EXIF DateTimeOriginal')
+                    dto = tags.get('EXIF DateTimeOriginal') or tags.get('EXIF DateTimeDigitized') or tags.get('Image DateTime')
                     str_dto = str(dto)
                     # YYYY:MM:DD
                     if dto is None or str_dto == '0000:00:00 00:00:00':
@@ -114,6 +121,7 @@ class ImageLibrarian:
         exif_date = ImageLibrarian.get_exif_date(abs_path)
         file_name_date = ImageLibrarian.get_date_from_name(os.path.basename(abs_path))
         system_created_date = ImageLibrarian.get_created_date(abs_path)
+        file_modified_date = ImageLibrarian.get_modified_date(abs_path)
 
         final_created_date = system_created_date # default
 
@@ -121,6 +129,12 @@ class ImageLibrarian:
             final_created_date = file_name_date
         elif exif_date is not None:
             final_created_date = exif_date
+        elif system_created_date is not None:
+            final_created_date = system_created_date
+        elif file_modified_date is not None:
+            final_created_date = file_modified_date
+        else:
+            final_created_date = datetime.fromisoformat('1970-01-01T00:00:00')
 
         if self.PREFLIGHT:
             preview = self.preview_path(self.output_root, abs_path, final_created_date)
@@ -143,7 +157,7 @@ class ImageLibrarian:
             if os.path.exists(to_path): # No Replace
                 return
             else:
-                print('COPY ', to_path)
+                print('COPY {0} to {1}'.format(from_file_path, to_path))
             shutil.copy2(from_file_path, to_path)
             logging.info('Copied {0} to {1}'.format(from_file_path, to_path))
         except IOError as err:
