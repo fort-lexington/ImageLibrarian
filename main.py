@@ -110,20 +110,13 @@ class ImageLibrarian:
         file_stats = os.stat(abs_path)
         self.total_size_mb += file_stats.st_size / (1024 * 1024)
 
-    def process_file(self, abs_path):
-        logging.debug(abs_path)
-        if self.is_duplicate(abs_path):
-            logging.info('DUPLICATE {0}'.format(abs_path))
-            return
-
-        self.log_size(abs_path)
-
+    def best_guess_created(self, abs_path):
         exif_date = ImageLibrarian.get_exif_date(abs_path)
         file_name_date = ImageLibrarian.get_date_from_name(os.path.basename(abs_path))
         system_created_date = ImageLibrarian.get_created_date(abs_path)
         file_modified_date = ImageLibrarian.get_modified_date(abs_path)
 
-        final_created_date = system_created_date # default
+        final_created_date = datetime.datetime.fromisoformat('1970-01-01T00:00:00')
 
         if file_name_date is not None:
             final_created_date = file_name_date
@@ -133,8 +126,19 @@ class ImageLibrarian:
             final_created_date = system_created_date
         elif file_modified_date is not None:
             final_created_date = file_modified_date
-        else:
-            final_created_date = datetime.fromisoformat('1970-01-01T00:00:00')
+
+        return final_created_date
+
+    def process_file(self, abs_path):
+        logging.debug(abs_path)
+        if '.thumbnails' in abs_path:
+            return
+        if self.is_duplicate(abs_path):
+            logging.info('DUPLICATE {0}'.format(abs_path))
+            return
+        self.log_size(abs_path)
+
+        final_created_date = self.best_guess_created(abs_path)
 
         if self.PREFLIGHT:
             preview = self.preview_path(self.output_root, abs_path, final_created_date)
